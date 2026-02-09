@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+.login-gradient {
+  background: radial-gradient(circle at top right, #4f46e5, #1e1b4b);
+}
