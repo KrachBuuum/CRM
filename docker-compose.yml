@@ -1,4 +1,3 @@
-
 version: '3.8'
 
 services:
@@ -28,8 +27,6 @@ services:
       - API_KEY=${API_KEY}
     depends_on:
       - db
-    env_file:
-      - ./backend/.env
     restart: always
 
   nginx:
