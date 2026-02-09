@@ -163,8 +163,8 @@ const App: React.FC = () => {
     try {
       const saved = await ApiService.createNote(newNote);
       setNotes(prev => [...prev, saved]);
-    } catch (e) {
-      console.error('Interne Zeit speichern fehlgeschlagen', e);
+    } catch (e: any) {
+      alert('Interne Zeit speichern fehlgeschlagen: ' + (e.message || ''));
     }
     setInternalTimeDescriptionModal(null);
   };

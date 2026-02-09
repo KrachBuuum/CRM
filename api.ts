@@ -9,14 +9,19 @@ const getAuthHeader = () => {
 };
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeader(),
-      ...options?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+        ...options?.headers,
+      },
+    });
+  } catch (networkErr: any) {
+    throw new Error('Server nicht erreichbar: ' + (networkErr.message || 'Netzwerkfehler'));
+  }
 
   if (response.status === 401 || response.status === 403) {
     localStorage.removeItem('crm_token');
@@ -25,8 +30,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    let msg = 'Netzwerkfehler';
-    try { const err = await response.json(); msg = err.error || msg; } catch {}
+    let msg = `Server-Fehler (${response.status})`;
+    try {
+      const text = await response.text();
+      try {
+        const err = JSON.parse(text);
+        msg = err.error || msg;
+      } catch {
+        // Response is not JSON (e.g. nginx HTML error page)
+        if (text.includes('502')) msg = 'Backend nicht erreichbar (502)';
+        else if (text.includes('504')) msg = 'Backend-Timeout (504)';
+        else msg = `Server-Fehler (${response.status}): ${text.slice(0, 100)}`;
+      }
+    } catch {}
     throw new Error(msg);
   }
 

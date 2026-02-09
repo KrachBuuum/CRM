@@ -22,6 +22,186 @@ const pool = new Pool({
 const JWT_SECRET = process.env.JWT_SECRET || "change_me"
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d"
 
+// --- DB Migration on Startup ---
+async function runMigrations() {
+  const client = await pool.connect()
+  try {
+    console.log("Running database migrations...")
+
+    // Create all tables if they don't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        username TEXT UNIQUE,
+        role TEXT,
+        cost_rate DECIMAL(10,2),
+        rates JSONB,
+        standard_rate_profile_id TEXT,
+        password_hash TEXT,
+        is_locked BOOLEAN DEFAULT FALSE
+      );
+      CREATE TABLE IF NOT EXISTS contacts (
+        id TEXT PRIMARY KEY,
+        category TEXT,
+        company_name TEXT,
+        website TEXT,
+        industry TEXT,
+        legal_form TEXT,
+        ust_id TEXT,
+        cooperation_status TEXT,
+        conditions TEXT,
+        region TEXT,
+        salutation TEXT,
+        title TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        uc_id TEXT,
+        phone_mobile TEXT,
+        phone_landline TEXT,
+        email_business TEXT,
+        email_private TEXT,
+        preferred_contact_way TEXT DEFAULT 'Mobil',
+        address JSONB,
+        billing_address_active BOOLEAN DEFAULT FALSE,
+        billing_address JSONB,
+        second_person_active BOOLEAN DEFAULT FALSE,
+        second_person_data JSONB,
+        internal_notes TEXT,
+        contacts JSONB
+      );
+      CREATE TABLE IF NOT EXISTS processes (
+        id TEXT PRIMARY KEY,
+        process_number TEXT UNIQUE,
+        type TEXT,
+        customer_id TEXT,
+        end_customer_id TEXT,
+        object_id TEXT,
+        title TEXT,
+        status TEXT,
+        date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        service_provider TEXT,
+        vs_number TEXT,
+        internal_notes TEXT,
+        storage_link TEXT,
+        invoices JSONB DEFAULT '[]'
+      );
+      CREATE TABLE IF NOT EXISTS notes (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        process_id TEXT,
+        process_number TEXT,
+        user_id TEXT,
+        user_name TEXT,
+        text TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        duration DECIMAL(10,3),
+        rate_profile_id TEXT,
+        assigned_user_id TEXT,
+        resubmission_date TEXT,
+        is_done BOOLEAN DEFAULT FALSE
+      );
+      CREATE TABLE IF NOT EXISTS objects (
+        id TEXT PRIMARY KEY,
+        display_name TEXT,
+        object_type TEXT,
+        build_year TEXT,
+        units INTEGER DEFAULT 0,
+        address JSONB,
+        owners JSONB DEFAULT '[]',
+        notes TEXT
+      );
+    `)
+
+    // Migrate column types (SERIAL/INTEGER -> TEXT) for old installations
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='id' AND data_type='integer') THEN
+          ALTER TABLE contacts ALTER COLUMN id DROP DEFAULT;
+          ALTER TABLE contacts ALTER COLUMN id TYPE TEXT USING id::TEXT;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='processes' AND column_name='id' AND data_type='integer') THEN
+          ALTER TABLE processes ALTER COLUMN id DROP DEFAULT;
+          ALTER TABLE processes ALTER COLUMN id TYPE TEXT USING id::TEXT;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notes' AND column_name='id' AND data_type='integer') THEN
+          ALTER TABLE notes ALTER COLUMN id DROP DEFAULT;
+          ALTER TABLE notes ALTER COLUMN id TYPE TEXT USING id::TEXT;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='processes' AND column_name='customer_id' AND data_type='integer') THEN
+          ALTER TABLE processes ALTER COLUMN customer_id TYPE TEXT USING customer_id::TEXT;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notes' AND column_name='process_id' AND data_type='integer') THEN
+          ALTER TABLE notes ALTER COLUMN process_id TYPE TEXT USING process_id::TEXT;
+        END IF;
+      END$$;
+    `)
+
+    // Add missing columns for old installations
+    const addCol = async (table, col, type) => {
+      const check = await client.query(
+        "SELECT 1 FROM information_schema.columns WHERE table_name=$1 AND column_name=$2",
+        [table, col]
+      )
+      if (check.rowCount === 0) {
+        await client.query(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`)
+        console.log(`  Added column ${table}.${col}`)
+      }
+    }
+
+    // contacts columns
+    await addCol("contacts", "website", "TEXT")
+    await addCol("contacts", "industry", "TEXT")
+    await addCol("contacts", "legal_form", "TEXT")
+    await addCol("contacts", "ust_id", "TEXT")
+    await addCol("contacts", "cooperation_status", "TEXT")
+    await addCol("contacts", "conditions", "TEXT")
+    await addCol("contacts", "region", "TEXT")
+    await addCol("contacts", "salutation", "TEXT")
+    await addCol("contacts", "title", "TEXT")
+    await addCol("contacts", "uc_id", "TEXT")
+    await addCol("contacts", "email_private", "TEXT")
+    await addCol("contacts", "preferred_contact_way", "TEXT DEFAULT 'Mobil'")
+    await addCol("contacts", "billing_address_active", "BOOLEAN DEFAULT FALSE")
+    await addCol("contacts", "billing_address", "JSONB")
+    await addCol("contacts", "second_person_active", "BOOLEAN DEFAULT FALSE")
+    await addCol("contacts", "second_person_data", "JSONB")
+    await addCol("contacts", "contacts", "JSONB")
+
+    // processes columns
+    await addCol("processes", "end_customer_id", "TEXT")
+    await addCol("processes", "service_provider", "TEXT")
+    await addCol("processes", "vs_number", "TEXT")
+    await addCol("processes", "internal_notes", "TEXT")
+    await addCol("processes", "storage_link", "TEXT")
+    await addCol("processes", "invoices", "JSONB DEFAULT '[]'")
+
+    // notes columns
+    await addCol("notes", "process_number", "TEXT")
+    await addCol("notes", "assigned_user_id", "TEXT")
+    await addCol("notes", "resubmission_date", "TEXT")
+    await addCol("notes", "is_done", "BOOLEAN DEFAULT FALSE")
+
+    // Ensure admin user exists
+    const adminCheck = await client.query("SELECT 1 FROM users WHERE username='admin'")
+    if (adminCheck.rowCount === 0) {
+      const hash = await bcrypt.hash("admin123", 10)
+      await client.query(
+        `INSERT INTO users (id, name, username, role, cost_rate, rates, standard_rate_profile_id, password_hash)
+         VALUES ('u1', 'System Administrator', 'admin', 'ADMIN', 85.00, $1, 'Sachverständiger', $2)`,
+        [JSON.stringify([{ roleName: "Sachverständiger", rate: 150 }]), hash]
+      )
+      console.log("  Created default admin user (admin/admin123)")
+    }
+
+    console.log("Database migrations completed.")
+  } catch (err) {
+    console.error("Migration error:", err.message)
+  } finally {
+    client.release()
+  }
+}
+
 // --- Helper: snake_case DB rows -> camelCase for frontend ---
 function mapContact(row) {
   if (!row) return null
@@ -374,9 +554,9 @@ app.post("/api/notes", requireAuth, async (req, res) => {
   try {
     const n = req.body || {}
     const r = await pool.query(
-      `INSERT INTO notes (id, process_id, process_number, user_id, user_name, text, duration, rate_profile_id, assigned_user_id, resubmission_date, is_done)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [n.id || Math.random().toString(36).substr(2, 12), n.processId, n.processNumber, n.userId || req.user.id, n.userName || req.user.username, n.text || "", n.duration ?? 0, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false]
+      `INSERT INTO notes (id, process_id, process_number, user_id, user_name, text, timestamp, duration, rate_profile_id, assigned_user_id, resubmission_date, is_done)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [n.id || Math.random().toString(36).substr(2, 12), n.processId, n.processNumber, n.userId || req.user.id, n.userName || req.user.username, n.text || "", n.timestamp || new Date().toISOString(), n.duration ?? 0, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false]
     )
     res.status(201).json(mapNote(r.rows[0]))
   } catch (err) {
@@ -389,8 +569,8 @@ app.put("/api/notes/:id", requireAuth, async (req, res) => {
   try {
     const n = req.body || {}
     const r = await pool.query(
-      `UPDATE notes SET text=$1, duration=$2, rate_profile_id=$3, assigned_user_id=$4, resubmission_date=$5, is_done=$6 WHERE id=$7 RETURNING *`,
-      [n.text, n.duration, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false, req.params.id]
+      `UPDATE notes SET text=$1, duration=$2, rate_profile_id=$3, assigned_user_id=$4, resubmission_date=$5, is_done=$6, timestamp=$7 WHERE id=$8 RETURNING *`,
+      [n.text, n.duration, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false, n.timestamp || new Date().toISOString(), req.params.id]
     )
     if (r.rowCount === 0) return res.status(404).json({ error: "Notiz nicht gefunden" })
     res.json(mapNote(r.rows[0]))
@@ -410,7 +590,35 @@ app.delete("/api/notes/:id", requireAuth, async (req, res) => {
   }
 })
 
+// --- Express catch-all error handler ---
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err)
+  res.status(500).json({ error: "Interner Serverfehler: " + (err.message || "Unbekannt") })
+})
+
+// --- Start server with migrations ---
 const port = Number(process.env.BACKEND_PORT || process.env.PORT || 3000)
-app.listen(port, "0.0.0.0", () => {
-  console.log(`API running on ${port}`)
+
+async function start() {
+  // Wait for DB to be ready (important for Docker startup order)
+  for (let i = 0; i < 30; i++) {
+    try {
+      await pool.query("SELECT 1")
+      break
+    } catch (err) {
+      console.log(`Waiting for database... (${i + 1}/30)`)
+      await new Promise(r => setTimeout(r, 2000))
+    }
+  }
+
+  await runMigrations()
+
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`API running on ${port}`)
+  })
+}
+
+start().catch(err => {
+  console.error("Failed to start server:", err)
+  process.exit(1)
 })
