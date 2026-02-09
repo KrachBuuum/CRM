@@ -82,5 +82,5 @@ export const convertToExplorerLink = (path: string): string => {
  * Commercial rounding for Euro amounts (no decimals)
  */
 export const formatEuroDashboard = (amount: number): string => {
-  return Math.round(amount).toLocaleString('de-DE') + ' €';
+  return Math.round(Number(amount) || 0).toLocaleString('de-DE') + ' €';
 };

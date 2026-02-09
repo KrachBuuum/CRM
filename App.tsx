@@ -241,17 +241,18 @@ const App: React.FC = () => {
     const userNotes = inRangeNotes.filter(n => n.userId === currentUser.id);
 
     const calcFinance = (ns: Note[]) => {
-      const procHours = ns.filter(n => n.processId !== 'INTERNAL').reduce((s, n) => s + n.duration, 0);
-      const internHours = ns.filter(n => n.processId === 'INTERNAL').reduce((s, n) => s + n.duration, 0);
+      const dur = (n: Note) => Number(n.duration) || 0;
+      const procHours = ns.filter(n => n.processId !== 'INTERNAL').reduce((s, n) => s + dur(n), 0);
+      const internHours = ns.filter(n => n.processId === 'INTERNAL').reduce((s, n) => s + dur(n), 0);
       const earned = ns.filter(n => n.processId !== 'INTERNAL').reduce((sum, n) => {
         const userObj = users.find(u => u.id === n.userId);
         const userRate = userObj?.rates.find(r => r.roleName === n.rateProfileId)?.rate || 0;
-        return sum + (n.duration * userRate);
+        return sum + (dur(n) * userRate);
       }, 0);
       const costs = ns.reduce((sum, n) => {
         const userObj = users.find(u => u.id === n.userId);
-        const costRate = userObj?.costRate || 0;
-        return sum + (n.duration * costRate);
+        const costRate = Number(userObj?.costRate) || 0;
+        return sum + (dur(n) * costRate);
       }, 0);
       return { procHours, internHours, earned, costs };
     };

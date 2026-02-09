@@ -369,7 +369,7 @@ export const Dashboard: React.FC<{
                 >
                   <div className="text-left">
                     <p className="text-[9px] font-black text-rose-600 uppercase">{inv.process.processNumber}</p>
-                    <p className="text-[11px] font-bold text-slate-700">{inv.amount.toFixed(2)} €</p>
+                    <p className="text-[11px] font-bold text-slate-700">{(Number(inv.amount) || 0).toFixed(2)} €</p>
                   </div>
                   <AlertCircle size={14} className="text-rose-400"/>
                 </button>
@@ -406,9 +406,9 @@ export const ProcessList: React.FC<{ processes: Process[], notes: Note[], users:
     const pNotes = notes.filter(n => n.processId === p.id);
     const bookedCosts = pNotes.reduce((sum, n) => {
       const u = users.find(usr => usr.id === n.userId);
-      return sum + (n.duration * (u?.costRate || 0));
+      return sum + ((Number(n.duration) || 0) * (Number(u?.costRate) || 0));
     }, 0);
-    const revenue = (p.invoices || []).reduce((sum, inv) => sum + inv.amount, 0);
+    const revenue = (p.invoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
     return { bookedCosts, profit: revenue - bookedCosts };
   };
 
@@ -510,10 +510,10 @@ export const ProcessDetail: React.FC<{
   const financialStats = useMemo(() => {
     const bookedCosts = notes.reduce((sum, n) => {
       const userObj = users.find(u => u.id === n.userId);
-      return sum + (n.duration * (userObj?.costRate || 0));
+      return sum + ((Number(n.duration) || 0) * (Number(userObj?.costRate) || 0));
     }, 0);
-    const invoiced = (process.invoices || []).reduce((sum, inv) => sum + inv.amount, 0);
-    const paid = (process.invoices || []).filter(inv => !!inv.paidDate).reduce((sum, inv) => sum + inv.amount, 0);
+    const invoiced = (process.invoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+    const paid = (process.invoices || []).filter(inv => !!inv.paidDate).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
     return { bookedCosts, invoiced, paid, profit: invoiced - bookedCosts };
   }, [notes, process.invoices, users]);
 
@@ -737,7 +737,7 @@ export const ProcessDetail: React.FC<{
                        <tr key={inv.id} className="text-sm font-bold text-slate-700 group">
                           <td className="py-4">{formatDate(inv.invoiceDate)}</td>
                           <td className="py-4">{formatDate(inv.dueDate)}</td>
-                          <td className="py-4">{inv.amount.toFixed(2)} €</td>
+                          <td className="py-4">{(Number(inv.amount) || 0).toFixed(2)} €</td>
                           <td className="py-4">
                              {isPaid ? (
                                 <span className="text-emerald-600">{formatDate(inv.paidDate!)}</span>
@@ -796,7 +796,7 @@ export const ProcessDetail: React.FC<{
                  </div>
                  <div className="text-right ml-10 flex items-center space-x-6">
                     <div>
-                      <div className="text-xl font-black text-indigo-600">{n.duration.toFixed(3)}h</div>
+                      <div className="text-xl font-black text-indigo-600">{(Number(n.duration) || 0).toFixed(3)}h</div>
                       <div className="text-[9px] uppercase font-black text-slate-400 tracking-widest">{n.rateProfileId}</div>
                     </div>
                     <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all">
@@ -906,7 +906,7 @@ export const InternalTimesTab: React.FC<{
             {notes.sort((a,b) => b.timestamp.localeCompare(a.timestamp)).map(n => (
               <tr key={n.id} className="text-sm font-bold text-slate-700 group hover:bg-slate-50">
                 <td className="px-6 py-4">{formatDate(n.timestamp)}</td>
-                <td className="px-6 py-4">{n.duration.toFixed(3)} h</td>
+                <td className="px-6 py-4">{(Number(n.duration) || 0).toFixed(3)} h</td>
                 <td className="px-6 py-4 truncate max-w-xs">{n.text}</td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end space-x-2">
