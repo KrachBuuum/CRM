@@ -75,7 +75,7 @@ const App: React.FC = () => {
       onLogout={ApiService.logout}
       // ... restliche Props wie zuvor
     >
-      {activeTab === 'dashboard' && <Dashboard stats={{} as any} timeRange="Heute" onSetTimeRange={() => {}} onNavigateToProcess={() => {}} onStatusClick={() => {}} onMarkTaskDone={() => {}} />}
+      {activeTab === 'dashboard' && <Dashboard processes={processes} contacts={contacts} />}
       {/* ... restliche Tabs ... */}
     </Layout>
   );
