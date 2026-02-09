@@ -140,20 +140,25 @@ function requireAuth(req, res, next) {
 app.get("/api/health", (req, res) => res.json({ ok: true }))
 
 app.post("/api/auth/login", async (req, res) => {
-  const { username, password } = req.body || {}
-  if (!username || !password) return res.status(400).json({ error: "username und password sind erforderlich" })
+  try {
+    const { username, password } = req.body || {}
+    if (!username || !password) return res.status(400).json({ error: "username und password sind erforderlich" })
 
-  const result = await pool.query("SELECT * FROM users WHERE username = $1 LIMIT 1", [username])
-  if (result.rowCount === 0) return res.status(401).json({ error: "ungültige zugangsdaten" })
+    const result = await pool.query("SELECT * FROM users WHERE username = $1 LIMIT 1", [username])
+    if (result.rowCount === 0) return res.status(401).json({ error: "ungültige zugangsdaten" })
 
-  const user = result.rows[0]
-  if (user.is_locked) return res.status(403).json({ error: "konto gesperrt" })
+    const user = result.rows[0]
+    if (user.is_locked) return res.status(403).json({ error: "konto gesperrt" })
 
-  const ok = await bcrypt.compare(password, user.password_hash || "")
-  if (!ok) return res.status(401).json({ error: "ungültige zugangsdaten" })
+    const ok = await bcrypt.compare(password, user.password_hash || "")
+    if (!ok) return res.status(401).json({ error: "ungültige zugangsdaten" })
 
-  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
-  res.json({ token, user: { id: user.id, username: user.username, role: user.role } })
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } })
+  } catch (err) {
+    console.error("Login error:", err.message)
+    res.status(500).json({ error: "Serverfehler beim Login" })
+  }
 })
 
 app.get("/api/me", requireAuth, (req, res) => res.json({ user: req.user }))
@@ -161,163 +166,248 @@ app.get("/api/me", requireAuth, (req, res) => res.json({ user: req.user }))
 // --- USERS ---
 
 app.get("/api/users", requireAuth, async (req, res) => {
-  const r = await pool.query("SELECT * FROM users ORDER BY username")
-  res.json(r.rows.map(mapUser))
+  try {
+    const r = await pool.query("SELECT * FROM users ORDER BY username")
+    res.json(r.rows.map(mapUser))
+  } catch (err) {
+    console.error("GET users error:", err.message)
+    res.status(500).json({ error: "Benutzer laden fehlgeschlagen" })
+  }
 })
 
 app.post("/api/users", requireAuth, async (req, res) => {
-  if (req.user.role !== "ADMIN") return res.status(403).json({ error: "Nur Admins dürfen Benutzer erstellen" })
-  const u = req.body || {}
-  if (!u.username || !u.name || !u.password) return res.status(400).json({ error: "name, username und password sind erforderlich" })
-  const hash = await bcrypt.hash(u.password, 10)
-  const r = await pool.query(
-    `INSERT INTO users (id, name, username, role, cost_rate, rates, standard_rate_profile_id, password_hash, is_locked)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [u.id || Math.random().toString(36).substr(2, 9), u.name, u.username, u.role || "STANDARD", u.costRate ?? 0, JSON.stringify(u.rates || []), u.standardRateProfileId || "", hash, u.isLocked ?? false]
-  )
-  res.status(201).json(mapUser(r.rows[0]))
+  try {
+    if (req.user.role !== "ADMIN") return res.status(403).json({ error: "Nur Admins dürfen Benutzer erstellen" })
+    const u = req.body || {}
+    if (!u.username || !u.name || !u.password) return res.status(400).json({ error: "name, username und password sind erforderlich" })
+    const hash = await bcrypt.hash(u.password, 10)
+    const r = await pool.query(
+      `INSERT INTO users (id, name, username, role, cost_rate, rates, standard_rate_profile_id, password_hash, is_locked)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [u.id || Math.random().toString(36).substr(2, 9), u.name, u.username, u.role || "STANDARD", u.costRate ?? 0, JSON.stringify(u.rates || []), u.standardRateProfileId || "", hash, u.isLocked ?? false]
+    )
+    res.status(201).json(mapUser(r.rows[0]))
+  } catch (err) {
+    console.error("POST users error:", err.message)
+    res.status(500).json({ error: err.message.includes("duplicate") ? "Benutzername existiert bereits" : "Benutzer erstellen fehlgeschlagen: " + err.message })
+  }
 })
 
 app.put("/api/users/:id", requireAuth, async (req, res) => {
-  if (req.user.role !== "ADMIN") return res.status(403).json({ error: "Nur Admins dürfen Benutzer bearbeiten" })
-  const u = req.body || {}
-  let r
-  if (u.password) {
-    const hash = await bcrypt.hash(u.password, 10)
-    r = await pool.query(
-      `UPDATE users SET name=$1, username=$2, role=$3, cost_rate=$4, rates=$5, standard_rate_profile_id=$6, is_locked=$7, password_hash=$8 WHERE id=$9 RETURNING *`,
-      [u.name, u.username, u.role, u.costRate ?? 0, JSON.stringify(u.rates || []), u.standardRateProfileId || "", u.isLocked ?? false, hash, req.params.id]
-    )
-  } else {
-    r = await pool.query(
-      `UPDATE users SET name=$1, username=$2, role=$3, cost_rate=$4, rates=$5, standard_rate_profile_id=$6, is_locked=$7 WHERE id=$8 RETURNING *`,
-      [u.name, u.username, u.role, u.costRate ?? 0, JSON.stringify(u.rates || []), u.standardRateProfileId || "", u.isLocked ?? false, req.params.id]
-    )
+  try {
+    if (req.user.role !== "ADMIN") return res.status(403).json({ error: "Nur Admins dürfen Benutzer bearbeiten" })
+    const u = req.body || {}
+    let r
+    if (u.password) {
+      const hash = await bcrypt.hash(u.password, 10)
+      r = await pool.query(
+        `UPDATE users SET name=$1, username=$2, role=$3, cost_rate=$4, rates=$5, standard_rate_profile_id=$6, is_locked=$7, password_hash=$8 WHERE id=$9 RETURNING *`,
+        [u.name, u.username, u.role, u.costRate ?? 0, JSON.stringify(u.rates || []), u.standardRateProfileId || "", u.isLocked ?? false, hash, req.params.id]
+      )
+    } else {
+      r = await pool.query(
+        `UPDATE users SET name=$1, username=$2, role=$3, cost_rate=$4, rates=$5, standard_rate_profile_id=$6, is_locked=$7 WHERE id=$8 RETURNING *`,
+        [u.name, u.username, u.role, u.costRate ?? 0, JSON.stringify(u.rates || []), u.standardRateProfileId || "", u.isLocked ?? false, req.params.id]
+      )
+    }
+    if (r.rowCount === 0) return res.status(404).json({ error: "Benutzer nicht gefunden" })
+    res.json(mapUser(r.rows[0]))
+  } catch (err) {
+    console.error("PUT users error:", err.message)
+    res.status(500).json({ error: "Benutzer bearbeiten fehlgeschlagen: " + err.message })
   }
-  if (r.rowCount === 0) return res.status(404).json({ error: "Benutzer nicht gefunden" })
-  res.json(mapUser(r.rows[0]))
 })
 
 app.delete("/api/users/:id", requireAuth, async (req, res) => {
-  if (req.user.role !== "ADMIN") return res.status(403).json({ error: "Nur Admins dürfen Benutzer löschen" })
-  if (req.params.id === req.user.id) return res.status(400).json({ error: "Eigenen Account kann man nicht löschen" })
-  await pool.query("DELETE FROM users WHERE id = $1", [req.params.id])
-  res.status(204).end()
+  try {
+    if (req.user.role !== "ADMIN") return res.status(403).json({ error: "Nur Admins dürfen Benutzer löschen" })
+    if (req.params.id === req.user.id) return res.status(400).json({ error: "Eigenen Account kann man nicht löschen" })
+    await pool.query("DELETE FROM users WHERE id = $1", [req.params.id])
+    res.status(204).end()
+  } catch (err) {
+    console.error("DELETE users error:", err.message)
+    res.status(500).json({ error: "Benutzer löschen fehlgeschlagen" })
+  }
 })
 
 // --- CONTACTS ---
 
 app.get("/api/contacts", requireAuth, async (req, res) => {
-  const r = await pool.query("SELECT * FROM contacts ORDER BY id DESC")
-  res.json(r.rows.map(mapContact))
+  try {
+    const r = await pool.query("SELECT * FROM contacts ORDER BY id DESC")
+    res.json(r.rows.map(mapContact))
+  } catch (err) {
+    console.error("GET contacts error:", err.message)
+    res.status(500).json({ error: "Kontakte laden fehlgeschlagen" })
+  }
 })
 
 app.post("/api/contacts", requireAuth, async (req, res) => {
-  const c = req.body || {}
-  const r = await pool.query(
-    `INSERT INTO contacts (id, category, company_name, website, industry, legal_form, ust_id, cooperation_status, conditions, region, salutation, title, first_name, last_name, uc_id, phone_mobile, phone_landline, email_business, email_private, preferred_contact_way, address, billing_address_active, billing_address, second_person_active, second_person_data, internal_notes, contacts)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING *`,
-    [c.id, c.category, c.companyName, c.website, c.industry, c.legalForm, c.ustId, c.cooperationStatus, c.conditions, c.region, c.salutation, c.title, c.firstName, c.lastName, c.ucId, c.phoneMobile, c.phoneLandline, c.emailBusiness, c.emailPrivate, c.preferredContactWay || 'Mobil', JSON.stringify(c.address || {}), c.billingAddressActive ?? false, JSON.stringify(c.billingAddress || null), c.secondPersonActive ?? false, JSON.stringify(c.secondPersonData || null), c.internalNotes, JSON.stringify(c.contacts || [])]
-  )
-  res.status(201).json(mapContact(r.rows[0]))
+  try {
+    const c = req.body || {}
+    const r = await pool.query(
+      `INSERT INTO contacts (id, category, company_name, website, industry, legal_form, ust_id, cooperation_status, conditions, region, salutation, title, first_name, last_name, uc_id, phone_mobile, phone_landline, email_business, email_private, preferred_contact_way, address, billing_address_active, billing_address, second_person_active, second_person_data, internal_notes, contacts)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING *`,
+      [c.id, c.category, c.companyName, c.website, c.industry, c.legalForm, c.ustId, c.cooperationStatus, c.conditions, c.region, c.salutation, c.title, c.firstName, c.lastName, c.ucId, c.phoneMobile, c.phoneLandline, c.emailBusiness, c.emailPrivate, c.preferredContactWay || 'Mobil', JSON.stringify(c.address || {}), c.billingAddressActive ?? false, JSON.stringify(c.billingAddress || null), c.secondPersonActive ?? false, JSON.stringify(c.secondPersonData || null), c.internalNotes, JSON.stringify(c.contacts || [])]
+    )
+    res.status(201).json(mapContact(r.rows[0]))
+  } catch (err) {
+    console.error("POST contacts error:", err.message)
+    res.status(500).json({ error: "Kontakt erstellen fehlgeschlagen: " + err.message })
+  }
 })
 
 app.put("/api/contacts/:id", requireAuth, async (req, res) => {
-  const c = req.body || {}
-  const r = await pool.query(
-    `UPDATE contacts SET category=$1, company_name=$2, website=$3, industry=$4, legal_form=$5, ust_id=$6, cooperation_status=$7, conditions=$8, region=$9, salutation=$10, title=$11, first_name=$12, last_name=$13, uc_id=$14, phone_mobile=$15, phone_landline=$16, email_business=$17, email_private=$18, preferred_contact_way=$19, address=$20, billing_address_active=$21, billing_address=$22, second_person_active=$23, second_person_data=$24, internal_notes=$25, contacts=$26
-     WHERE id=$27 RETURNING *`,
-    [c.category, c.companyName, c.website, c.industry, c.legalForm, c.ustId, c.cooperationStatus, c.conditions, c.region, c.salutation, c.title, c.firstName, c.lastName, c.ucId, c.phoneMobile, c.phoneLandline, c.emailBusiness, c.emailPrivate, c.preferredContactWay, JSON.stringify(c.address || {}), c.billingAddressActive ?? false, JSON.stringify(c.billingAddress || null), c.secondPersonActive ?? false, JSON.stringify(c.secondPersonData || null), c.internalNotes, JSON.stringify(c.contacts || []), req.params.id]
-  )
-  if (r.rowCount === 0) return res.status(404).json({ error: "Kontakt nicht gefunden" })
-  res.json(mapContact(r.rows[0]))
+  try {
+    const c = req.body || {}
+    const r = await pool.query(
+      `UPDATE contacts SET category=$1, company_name=$2, website=$3, industry=$4, legal_form=$5, ust_id=$6, cooperation_status=$7, conditions=$8, region=$9, salutation=$10, title=$11, first_name=$12, last_name=$13, uc_id=$14, phone_mobile=$15, phone_landline=$16, email_business=$17, email_private=$18, preferred_contact_way=$19, address=$20, billing_address_active=$21, billing_address=$22, second_person_active=$23, second_person_data=$24, internal_notes=$25, contacts=$26
+       WHERE id=$27 RETURNING *`,
+      [c.category, c.companyName, c.website, c.industry, c.legalForm, c.ustId, c.cooperationStatus, c.conditions, c.region, c.salutation, c.title, c.firstName, c.lastName, c.ucId, c.phoneMobile, c.phoneLandline, c.emailBusiness, c.emailPrivate, c.preferredContactWay, JSON.stringify(c.address || {}), c.billingAddressActive ?? false, JSON.stringify(c.billingAddress || null), c.secondPersonActive ?? false, JSON.stringify(c.secondPersonData || null), c.internalNotes, JSON.stringify(c.contacts || []), req.params.id]
+    )
+    if (r.rowCount === 0) return res.status(404).json({ error: "Kontakt nicht gefunden" })
+    res.json(mapContact(r.rows[0]))
+  } catch (err) {
+    console.error("PUT contacts error:", err.message)
+    res.status(500).json({ error: "Kontakt bearbeiten fehlgeschlagen: " + err.message })
+  }
 })
 
 // --- PROCESSES ---
 
 app.get("/api/processes", requireAuth, async (req, res) => {
-  const r = await pool.query("SELECT * FROM processes ORDER BY date_created DESC")
-  res.json(r.rows.map(mapProcess))
+  try {
+    const r = await pool.query("SELECT * FROM processes ORDER BY date_created DESC")
+    res.json(r.rows.map(mapProcess))
+  } catch (err) {
+    console.error("GET processes error:", err.message)
+    res.status(500).json({ error: "Vorgänge laden fehlgeschlagen" })
+  }
 })
 
 app.post("/api/processes", requireAuth, async (req, res) => {
-  const p = req.body || {}
-  const r = await pool.query(
-    `INSERT INTO processes (id, process_number, type, customer_id, end_customer_id, object_id, title, status, date_created, service_provider, vs_number, internal_notes, storage_link, invoices)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-    [p.id, p.processNumber, p.type, p.customerId, p.endCustomerId, p.objectId, p.title, p.status, p.dateCreated || new Date().toISOString(), p.serviceProvider, p.vsNumber, p.internalNotes, p.storageLink, JSON.stringify(p.invoices || [])]
-  )
-  res.status(201).json(mapProcess(r.rows[0]))
+  try {
+    const p = req.body || {}
+    const r = await pool.query(
+      `INSERT INTO processes (id, process_number, type, customer_id, end_customer_id, object_id, title, status, date_created, service_provider, vs_number, internal_notes, storage_link, invoices)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [p.id, p.processNumber, p.type, p.customerId, p.endCustomerId, p.objectId, p.title, p.status, p.dateCreated || new Date().toISOString(), p.serviceProvider, p.vsNumber, p.internalNotes, p.storageLink, JSON.stringify(p.invoices || [])]
+    )
+    res.status(201).json(mapProcess(r.rows[0]))
+  } catch (err) {
+    console.error("POST processes error:", err.message)
+    res.status(500).json({ error: "Vorgang erstellen fehlgeschlagen: " + err.message })
+  }
 })
 
 app.put("/api/processes/:id", requireAuth, async (req, res) => {
-  const p = req.body || {}
-  const r = await pool.query(
-    `UPDATE processes SET process_number=$1, type=$2, customer_id=$3, end_customer_id=$4, object_id=$5, title=$6, status=$7, service_provider=$8, vs_number=$9, internal_notes=$10, storage_link=$11, invoices=$12
-     WHERE id=$13 RETURNING *`,
-    [p.processNumber, p.type, p.customerId, p.endCustomerId, p.objectId, p.title, p.status, p.serviceProvider, p.vsNumber, p.internalNotes, p.storageLink, JSON.stringify(p.invoices || []), req.params.id]
-  )
-  if (r.rowCount === 0) return res.status(404).json({ error: "Vorgang nicht gefunden" })
-  res.json(mapProcess(r.rows[0]))
+  try {
+    const p = req.body || {}
+    const r = await pool.query(
+      `UPDATE processes SET process_number=$1, type=$2, customer_id=$3, end_customer_id=$4, object_id=$5, title=$6, status=$7, service_provider=$8, vs_number=$9, internal_notes=$10, storage_link=$11, invoices=$12
+       WHERE id=$13 RETURNING *`,
+      [p.processNumber, p.type, p.customerId, p.endCustomerId, p.objectId, p.title, p.status, p.serviceProvider, p.vsNumber, p.internalNotes, p.storageLink, JSON.stringify(p.invoices || []), req.params.id]
+    )
+    if (r.rowCount === 0) return res.status(404).json({ error: "Vorgang nicht gefunden" })
+    res.json(mapProcess(r.rows[0]))
+  } catch (err) {
+    console.error("PUT processes error:", err.message)
+    res.status(500).json({ error: "Vorgang bearbeiten fehlgeschlagen: " + err.message })
+  }
 })
 
 // --- OBJECTS ---
 
 app.get("/api/objects", requireAuth, async (req, res) => {
-  const r = await pool.query("SELECT * FROM objects ORDER BY id DESC")
-  res.json(r.rows.map(mapObject))
+  try {
+    const r = await pool.query("SELECT * FROM objects ORDER BY id DESC")
+    res.json(r.rows.map(mapObject))
+  } catch (err) {
+    console.error("GET objects error:", err.message)
+    res.status(500).json({ error: "Objekte laden fehlgeschlagen" })
+  }
 })
 
 app.post("/api/objects", requireAuth, async (req, res) => {
-  const o = req.body || {}
-  const r = await pool.query(
-    `INSERT INTO objects (id, display_name, object_type, build_year, units, address, owners, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [o.id, o.displayName, o.objectType, o.buildYear, o.units || 0, JSON.stringify(o.address || {}), JSON.stringify(o.owners || []), o.notes]
-  )
-  res.status(201).json(mapObject(r.rows[0]))
+  try {
+    const o = req.body || {}
+    const r = await pool.query(
+      `INSERT INTO objects (id, display_name, object_type, build_year, units, address, owners, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [o.id, o.displayName, o.objectType, o.buildYear, o.units || 0, JSON.stringify(o.address || {}), JSON.stringify(o.owners || []), o.notes]
+    )
+    res.status(201).json(mapObject(r.rows[0]))
+  } catch (err) {
+    console.error("POST objects error:", err.message)
+    res.status(500).json({ error: "Objekt erstellen fehlgeschlagen: " + err.message })
+  }
 })
 
 app.put("/api/objects/:id", requireAuth, async (req, res) => {
-  const o = req.body || {}
-  const r = await pool.query(
-    `UPDATE objects SET display_name=$1, object_type=$2, build_year=$3, units=$4, address=$5, owners=$6, notes=$7 WHERE id=$8 RETURNING *`,
-    [o.displayName, o.objectType, o.buildYear, o.units || 0, JSON.stringify(o.address || {}), JSON.stringify(o.owners || []), o.notes, req.params.id]
-  )
-  if (r.rowCount === 0) return res.status(404).json({ error: "Objekt nicht gefunden" })
-  res.json(mapObject(r.rows[0]))
+  try {
+    const o = req.body || {}
+    const r = await pool.query(
+      `UPDATE objects SET display_name=$1, object_type=$2, build_year=$3, units=$4, address=$5, owners=$6, notes=$7 WHERE id=$8 RETURNING *`,
+      [o.displayName, o.objectType, o.buildYear, o.units || 0, JSON.stringify(o.address || {}), JSON.stringify(o.owners || []), o.notes, req.params.id]
+    )
+    if (r.rowCount === 0) return res.status(404).json({ error: "Objekt nicht gefunden" })
+    res.json(mapObject(r.rows[0]))
+  } catch (err) {
+    console.error("PUT objects error:", err.message)
+    res.status(500).json({ error: "Objekt bearbeiten fehlgeschlagen: " + err.message })
+  }
 })
 
 // --- NOTES ---
 
 app.get("/api/notes", requireAuth, async (req, res) => {
-  const r = await pool.query("SELECT * FROM notes ORDER BY timestamp DESC")
-  res.json(r.rows.map(mapNote))
+  try {
+    const r = await pool.query("SELECT * FROM notes ORDER BY timestamp DESC")
+    res.json(r.rows.map(mapNote))
+  } catch (err) {
+    console.error("GET notes error:", err.message)
+    res.status(500).json({ error: "Notizen laden fehlgeschlagen" })
+  }
 })
 
 app.post("/api/notes", requireAuth, async (req, res) => {
-  const n = req.body || {}
-  const r = await pool.query(
-    `INSERT INTO notes (id, process_id, process_number, user_id, user_name, text, duration, rate_profile_id, assigned_user_id, resubmission_date, is_done)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-    [n.id || Math.random().toString(36).substr(2, 12), n.processId, n.processNumber, n.userId || req.user.id, n.userName || req.user.username, n.text || "", n.duration ?? 0, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false]
-  )
-  res.status(201).json(mapNote(r.rows[0]))
+  try {
+    const n = req.body || {}
+    const r = await pool.query(
+      `INSERT INTO notes (id, process_id, process_number, user_id, user_name, text, duration, rate_profile_id, assigned_user_id, resubmission_date, is_done)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [n.id || Math.random().toString(36).substr(2, 12), n.processId, n.processNumber, n.userId || req.user.id, n.userName || req.user.username, n.text || "", n.duration ?? 0, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false]
+    )
+    res.status(201).json(mapNote(r.rows[0]))
+  } catch (err) {
+    console.error("POST notes error:", err.message)
+    res.status(500).json({ error: "Notiz erstellen fehlgeschlagen: " + err.message })
+  }
 })
 
 app.put("/api/notes/:id", requireAuth, async (req, res) => {
-  const n = req.body || {}
-  const r = await pool.query(
-    `UPDATE notes SET text=$1, duration=$2, rate_profile_id=$3, assigned_user_id=$4, resubmission_date=$5, is_done=$6 WHERE id=$7 RETURNING *`,
-    [n.text, n.duration, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false, req.params.id]
-  )
-  if (r.rowCount === 0) return res.status(404).json({ error: "Notiz nicht gefunden" })
-  res.json(mapNote(r.rows[0]))
+  try {
+    const n = req.body || {}
+    const r = await pool.query(
+      `UPDATE notes SET text=$1, duration=$2, rate_profile_id=$3, assigned_user_id=$4, resubmission_date=$5, is_done=$6 WHERE id=$7 RETURNING *`,
+      [n.text, n.duration, n.rateProfileId, n.assignedUserId, n.resubmissionDate, n.isDone ?? false, req.params.id]
+    )
+    if (r.rowCount === 0) return res.status(404).json({ error: "Notiz nicht gefunden" })
+    res.json(mapNote(r.rows[0]))
+  } catch (err) {
+    console.error("PUT notes error:", err.message)
+    res.status(500).json({ error: "Notiz bearbeiten fehlgeschlagen: " + err.message })
+  }
 })
 
 app.delete("/api/notes/:id", requireAuth, async (req, res) => {
-  await pool.query("DELETE FROM notes WHERE id = $1", [req.params.id])
-  res.status(204).end()
+  try {
+    await pool.query("DELETE FROM notes WHERE id = $1", [req.params.id])
+    res.status(204).end()
+  } catch (err) {
+    console.error("DELETE notes error:", err.message)
+    res.status(500).json({ error: "Notiz löschen fehlgeschlagen" })
+  }
 })
 
 const port = Number(process.env.BACKEND_PORT || process.env.PORT || 3000)

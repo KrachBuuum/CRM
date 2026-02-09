@@ -85,6 +85,31 @@ CREATE TABLE IF NOT EXISTS objects (
     notes TEXT
 );
 
+-- Migrate existing column TYPES (SERIAL/INTEGER -> TEXT) for old installations
+DO $$
+BEGIN
+    -- Convert id columns from SERIAL/INTEGER to TEXT
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='id' AND data_type='integer') THEN
+        ALTER TABLE contacts ALTER COLUMN id DROP DEFAULT;
+        ALTER TABLE contacts ALTER COLUMN id TYPE TEXT USING id::TEXT;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='processes' AND column_name='id' AND data_type='integer') THEN
+        ALTER TABLE processes ALTER COLUMN id DROP DEFAULT;
+        ALTER TABLE processes ALTER COLUMN id TYPE TEXT USING id::TEXT;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notes' AND column_name='id' AND data_type='integer') THEN
+        ALTER TABLE notes ALTER COLUMN id DROP DEFAULT;
+        ALTER TABLE notes ALTER COLUMN id TYPE TEXT USING id::TEXT;
+    END IF;
+    -- Convert foreign key columns from INTEGER to TEXT
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='processes' AND column_name='customer_id' AND data_type='integer') THEN
+        ALTER TABLE processes ALTER COLUMN customer_id TYPE TEXT USING customer_id::TEXT;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='notes' AND column_name='process_id' AND data_type='integer') THEN
+        ALTER TABLE notes ALTER COLUMN process_id TYPE TEXT USING process_id::TEXT;
+    END IF;
+END$$;
+
 -- Migrate existing tables: Add missing columns if upgrading
 DO $$
 BEGIN

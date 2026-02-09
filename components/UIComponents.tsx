@@ -1309,14 +1309,14 @@ export const AdminView: React.FC<{ users: User[], onSaveUser: (u: any, isNew: bo
           <tbody>
             {users.map(u => (
               <tr key={u.id} className="border-b hover:bg-slate-50">
-                <td className="px-8 py-5 text-sm font-bold text-slate-700">{u.name}</td>
-                <td className="px-8 py-5 text-xs font-bold text-slate-500">{u.username}</td>
-                <td className="px-8 py-5 text-xs font-bold text-indigo-500">{u.role}</td>
-                <td className="px-8 py-5 text-xs font-bold text-slate-600">{u.costRate.toFixed(2)}</td>
+                <td className="px-8 py-5 text-sm font-bold text-slate-700">{u.name || '-'}</td>
+                <td className="px-8 py-5 text-xs font-bold text-slate-500">{u.username || '-'}</td>
+                <td className="px-8 py-5 text-xs font-bold text-indigo-500">{u.role || '-'}</td>
+                <td className="px-8 py-5 text-xs font-bold text-slate-600">{(Number(u.costRate) || 0).toFixed(2)}</td>
                 <td className="px-8 py-5">{u.isLocked ? <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-full border border-rose-100"><Lock size={12} className="inline mr-1"/>Gesperrt</span> : <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100"><Unlock size={12} className="inline mr-1"/>Aktiv</span>}</td>
                 <td className="px-8 py-5 flex items-center space-x-2">
                   <button onClick={() => setShowModal(u)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Edit2 size={16}/></button>
-                  <button onClick={() => { if (confirm('Benutzer wirklich löschen?')) onDeleteUser(u.id); }} className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={16}/></button>
+                  <button onClick={() => { if (window.confirm('Benutzer wirklich löschen?')) onDeleteUser(u.id); }} className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={16}/></button>
                 </td>
               </tr>
             ))}

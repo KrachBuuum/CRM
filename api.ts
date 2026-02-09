@@ -25,8 +25,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || 'Netzwerkfehler');
+    let msg = 'Netzwerkfehler';
+    try { const err = await response.json(); msg = err.error || msg; } catch {}
+    throw new Error(msg);
   }
 
   if (response.status === 204) return undefined as T;

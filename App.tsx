@@ -285,7 +285,7 @@ const App: React.FC = () => {
       const saved = await ApiService.createNote(n);
       setNotes(prev => [...prev, saved]);
       setPrefilledDuration("0.00");
-    } catch (e) { console.error('Notiz speichern fehlgeschlagen', e); }
+    } catch (e: any) { alert('Notiz speichern fehlgeschlagen: ' + (e.message || '')); }
   };
 
   const handleUpdateNote = async (n: Note) => {
@@ -319,7 +319,7 @@ const App: React.FC = () => {
       const saved = await ApiService.createProcess(proc);
       setProcesses(prev => [saved, ...prev]);
       navigateTo('processes', saved.id);
-    } catch (e) { console.error('Vorgang erstellen fehlgeschlagen', e); }
+    } catch (e: any) { alert('Vorgang erstellen fehlgeschlagen: ' + (e.message || 'Unbekannter Fehler')); }
   };
 
   const handleUpdateProcess = async (p: Process) => {
@@ -391,7 +391,7 @@ const App: React.FC = () => {
     try {
       const saved = await ApiService.createContact(c);
       setContacts(prev => [...prev, saved]);
-    } catch (e) { console.error('Kontakt erstellen fehlgeschlagen', e); }
+    } catch (e: any) { alert('Kontakt erstellen fehlgeschlagen: ' + (e.message || '')); }
   };
 
   const handleUpdateContact = async (c: Contact) => {
@@ -406,7 +406,7 @@ const App: React.FC = () => {
     try {
       const saved = await ApiService.createObject(o);
       setObjects(prev => [...prev, saved]);
-    } catch (e) { console.error('Objekt erstellen fehlgeschlagen', e); }
+    } catch (e: any) { alert('Objekt erstellen fehlgeschlagen: ' + (e.message || '')); }
   };
 
   const handleUpdateObject = async (o: CRMObject) => {
