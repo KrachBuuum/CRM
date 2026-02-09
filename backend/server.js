@@ -102,9 +102,88 @@ app.get("/api/contacts", requireAuth, async (req, res) => {
   res.json(r.rows)
 })
 
+app.post("/api/contacts", requireAuth, async (req, res) => {
+  const c = req.body || {}
+  const r = await pool.query(
+    `INSERT INTO contacts (category, company_name, first_name, last_name, phone_mobile, phone_landline, email_business, address, internal_notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [
+      c.category ?? null,
+      c.company_name ?? c.companyName ?? null,
+      c.first_name ?? c.firstName ?? null,
+      c.last_name ?? c.lastName ?? null,
+      c.phone_mobile ?? c.phoneMobile ?? null,
+      c.phone_landline ?? c.phoneLandline ?? null,
+      c.email_business ?? c.emailBusiness ?? null,
+      c.address ? JSON.stringify(c.address) : null,
+      c.internal_notes ?? c.internalNotes ?? null,
+    ]
+  )
+  res.status(201).json(r.rows[0])
+})
+
+app.put("/api/contacts/:id", requireAuth, async (req, res) => {
+  const c = req.body || {}
+  const r = await pool.query(
+    `UPDATE contacts SET category=$1, company_name=$2, first_name=$3, last_name=$4,
+     phone_mobile=$5, phone_landline=$6, email_business=$7, address=$8, internal_notes=$9
+     WHERE id=$10 RETURNING *`,
+    [
+      c.category ?? null,
+      c.company_name ?? c.companyName ?? null,
+      c.first_name ?? c.firstName ?? null,
+      c.last_name ?? c.lastName ?? null,
+      c.phone_mobile ?? c.phoneMobile ?? null,
+      c.phone_landline ?? c.phoneLandline ?? null,
+      c.email_business ?? c.emailBusiness ?? null,
+      c.address ? JSON.stringify(c.address) : null,
+      c.internal_notes ?? c.internalNotes ?? null,
+      req.params.id,
+    ]
+  )
+  if (r.rowCount === 0) return res.status(404).json({ error: "Kontakt nicht gefunden" })
+  res.json(r.rows[0])
+})
+
 app.get("/api/processes", requireAuth, async (req, res) => {
   const r = await pool.query("SELECT * FROM processes ORDER BY id DESC")
   res.json(r.rows)
+})
+
+app.post("/api/processes", requireAuth, async (req, res) => {
+  const p = req.body || {}
+  const r = await pool.query(
+    `INSERT INTO processes (process_number, type, customer_id, object_id, title, status)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [
+      p.process_number ?? p.processNumber ?? null,
+      p.type ?? null,
+      p.customer_id ?? p.customerId ?? null,
+      p.object_id ?? p.objectId ?? null,
+      p.title ?? null,
+      p.status ?? "Lead",
+    ]
+  )
+  res.status(201).json(r.rows[0])
+})
+
+app.put("/api/processes/:id", requireAuth, async (req, res) => {
+  const p = req.body || {}
+  const r = await pool.query(
+    `UPDATE processes SET process_number=$1, type=$2, customer_id=$3, object_id=$4, title=$5, status=$6
+     WHERE id=$7 RETURNING *`,
+    [
+      p.process_number ?? p.processNumber ?? null,
+      p.type ?? null,
+      p.customer_id ?? p.customerId ?? null,
+      p.object_id ?? p.objectId ?? null,
+      p.title ?? null,
+      p.status ?? null,
+      req.params.id,
+    ]
+  )
+  if (r.rowCount === 0) return res.status(404).json({ error: "Vorgang nicht gefunden" })
+  res.json(r.rows[0])
 })
 
 app.get("/api/notes", requireAuth, async (req, res) => {
@@ -118,12 +197,12 @@ app.post("/api/notes", requireAuth, async (req, res) => {
   const r = await pool.query(
     "INSERT INTO notes (process_id, user_id, user_name, text, duration, rate_profile_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
     [
-      n.process_id ?? null,
-      n.user_id ?? req.user.id,
-      n.user_name ?? req.user.username,
+      n.process_id ?? n.processId ?? null,
+      n.user_id ?? n.userId ?? req.user.id,
+      n.user_name ?? n.userName ?? req.user.username,
       n.text ?? "",
       n.duration ?? null,
-      n.rate_profile_id ?? null,
+      n.rate_profile_id ?? n.rateProfileId ?? null,
     ]
   )
 
@@ -135,8 +214,66 @@ app.delete("/api/notes/:id", requireAuth, async (req, res) => {
   res.status(204).end()
 })
 
+app.put("/api/users/:id", requireAuth, async (req, res) => {
+  const u = req.body || {}
+  const r = await pool.query(
+    `UPDATE users SET name=$1, role=$2, cost_rate=$3, rates=$4, standard_rate_profile_id=$5, is_locked=$6
+     WHERE id=$7 RETURNING id, name, username, role, cost_rate, rates, standard_rate_profile_id, is_locked`,
+    [
+      u.name ?? null,
+      u.role ?? null,
+      u.cost_rate ?? u.costRate ?? null,
+      u.rates ? JSON.stringify(u.rates) : null,
+      u.standard_rate_profile_id ?? u.standardRateProfileId ?? null,
+      u.is_locked ?? u.isLocked ?? false,
+      req.params.id,
+    ]
+  )
+  if (r.rowCount === 0) return res.status(404).json({ error: "Benutzer nicht gefunden" })
+  res.json(r.rows[0])
+})
+
 app.get("/api/objects", requireAuth, async (req, res) => {
-  res.json([])
+  const r = await pool.query("SELECT * FROM objects ORDER BY id DESC")
+  res.json(r.rows)
+})
+
+app.post("/api/objects", requireAuth, async (req, res) => {
+  const o = req.body || {}
+  const r = await pool.query(
+    `INSERT INTO objects (display_name, object_type, build_year, units, address, owners, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [
+      o.display_name ?? o.displayName ?? null,
+      o.object_type ?? o.objectType ?? null,
+      o.build_year ?? o.buildYear ?? null,
+      o.units ?? null,
+      o.address ? JSON.stringify(o.address) : null,
+      o.owners ? JSON.stringify(o.owners) : null,
+      o.notes ?? null,
+    ]
+  )
+  res.status(201).json(r.rows[0])
+})
+
+app.put("/api/objects/:id", requireAuth, async (req, res) => {
+  const o = req.body || {}
+  const r = await pool.query(
+    `UPDATE objects SET display_name=$1, object_type=$2, build_year=$3, units=$4, address=$5, owners=$6, notes=$7
+     WHERE id=$8 RETURNING *`,
+    [
+      o.display_name ?? o.displayName ?? null,
+      o.object_type ?? o.objectType ?? null,
+      o.build_year ?? o.buildYear ?? null,
+      o.units ?? null,
+      o.address ? JSON.stringify(o.address) : null,
+      o.owners ? JSON.stringify(o.owners) : null,
+      o.notes ?? null,
+      req.params.id,
+    ]
+  )
+  if (r.rowCount === 0) return res.status(404).json({ error: "Objekt nicht gefunden" })
+  res.json(r.rows[0])
 })
 
 const port = Number(process.env.BACKEND_PORT || process.env.PORT || 3000)

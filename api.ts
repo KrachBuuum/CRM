@@ -25,8 +25,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error || 'Netzwerkfehler');
+    let message = 'Netzwerkfehler';
+    try {
+      const err = await response.json();
+      message = err.error || message;
+    } catch {
+      message = `Server-Fehler (${response.status})`;
+    }
+    throw new Error(message);
   }
 
   return response.json();
@@ -51,10 +57,21 @@ export const ApiService = {
   },
 
   getUsers: () => request<User[]>('/users'),
+  updateUser: (id: string, u: Partial<User>) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(u) }),
+
   getContacts: () => request<Contact[]>('/contacts'),
+  createContact: (c: Partial<Contact>) => request<Contact>('/contacts', { method: 'POST', body: JSON.stringify(c) }),
+  updateContact: (id: string, c: Partial<Contact>) => request<Contact>(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(c) }),
+
   getProcesses: () => request<Process[]>('/processes'),
+  createProcess: (p: Partial<Process>) => request<Process>('/processes', { method: 'POST', body: JSON.stringify(p) }),
+  updateProcess: (id: string, p: Partial<Process>) => request<Process>(`/processes/${id}`, { method: 'PUT', body: JSON.stringify(p) }),
+
   getObjects: () => request<CRMObject[]>('/objects'),
+  createObject: (o: Partial<CRMObject>) => request<CRMObject>('/objects', { method: 'POST', body: JSON.stringify(o) }),
+  updateObject: (id: string, o: Partial<CRMObject>) => request<CRMObject>(`/objects/${id}`, { method: 'PUT', body: JSON.stringify(o) }),
+
   getNotes: () => request<Note[]>('/notes'),
-  createNote: (n: Note) => request<Note>('/notes', { method: 'POST', body: JSON.stringify(n) }),
+  createNote: (n: Partial<Note>) => request<Note>('/notes', { method: 'POST', body: JSON.stringify(n) }),
   deleteNote: (id: string) => request<void>(`/notes/${id}`, { method: 'DELETE' }),
 };

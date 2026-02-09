@@ -17,6 +17,11 @@ const App: React.FC = () => {
   const [objects, setObjects] = useState<CRMObject[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
 
+  // UI-States
+  const [selectedProcess, setSelectedProcess] = useState<Process | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [showProcessForm, setShowProcessForm] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem('crm_token');
     if (token) {
@@ -42,8 +47,7 @@ const App: React.FC = () => {
       setContacts(c);
       setObjects(o);
       setNotes(n);
-      // Simulierter currentUser aus Token-Payload oder erstem User
-      setCurrentUser(u[0]); 
+      setCurrentUser(u[0]);
       setIsInitialized(true);
     } catch (err) {
       console.error("Fehler beim Laden", err);
@@ -62,21 +66,68 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCreateProcess = async (data: any) => {
+    try {
+      const created = await ApiService.createProcess(data);
+      setProcesses(prev => [created, ...prev]);
+      setShowProcessForm(false);
+    } catch (e: any) {
+      alert('Vorgang erstellen fehlgeschlagen: ' + e.message);
+    }
+  };
+
+  const handleSaveNote = async (noteData: any) => {
+    try {
+      const created = await ApiService.createNote(noteData);
+      setNotes(prev => [created, ...prev]);
+    } catch (e: any) {
+      alert('Speichern fehlgeschlagen: ' + e.message);
+    }
+  };
+
+  // Reset detail view when switching tabs
+  const handleSetActiveTab = (tab: string) => {
+    setActiveTab(tab);
+    setSelectedProcess(null);
+    setSelectedContact(null);
+  };
+
   if (loading || !isInitialized) return <div className="h-screen flex items-center justify-center login-gradient text-white">Lade System...</div>;
   if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
 
   return (
-    <Layout 
-      currentUser={currentUser} 
-      setCurrentUser={() => {}} // In Auth-Umgebung deaktiviert
+    <Layout
+      currentUser={currentUser}
+      setCurrentUser={() => {}}
       allUsers={users}
       activeTab={activeTab}
-      setActiveTab={setActiveTab}
+      setActiveTab={handleSetActiveTab}
       onLogout={ApiService.logout}
-      // ... restliche Props wie zuvor
     >
       {activeTab === 'dashboard' && <Dashboard processes={processes} contacts={contacts} />}
-      {/* ... restliche Tabs ... */}
+
+      {activeTab === 'processes' && !selectedProcess && (
+        <ProcessList processes={processes} onSelect={setSelectedProcess} onNew={() => setShowProcessForm(true)} />
+      )}
+      {activeTab === 'processes' && selectedProcess && (
+        <ProcessDetail
+          process={selectedProcess}
+          notes={notes.filter((n: any) => String(n.process_id) === String(selectedProcess.id))}
+          onBack={() => setSelectedProcess(null)}
+          onSaveNote={handleSaveNote}
+        />
+      )}
+
+      {activeTab === 'contacts' && !selectedContact && (
+        <ContactList contacts={contacts} onSelect={setSelectedContact} onNew={() => {}} />
+      )}
+      {activeTab === 'contacts' && selectedContact && (
+        <ContactDetail contact={selectedContact} onBack={() => setSelectedContact(null)} />
+      )}
+
+      {showProcessForm && (
+        <ProcessForm contacts={contacts} onClose={() => setShowProcessForm(false)} onSave={handleCreateProcess} />
+      )}
     </Layout>
   );
 };

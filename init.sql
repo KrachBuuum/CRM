@@ -47,6 +47,17 @@ CREATE TABLE IF NOT EXISTS notes (
     rate_profile_id TEXT
 );
 
+CREATE TABLE IF NOT EXISTS objects (
+    id SERIAL PRIMARY KEY,
+    display_name TEXT,
+    object_type TEXT,
+    build_year TEXT,
+    units INTEGER,
+    address JSONB,
+    owners JSONB,
+    notes TEXT
+);
+
 -- Admin User 'admin' / 'admin123'
 -- Hash für 'admin123': $2a$10$vI8A7sz51qV5W9.f8.6.GeLqZp6N6gO.P.D6qO1i.V6D8.r0G.Z0e
 INSERT INTO users (id, name, username, role, cost_rate, rates, standard_rate_profile_id, password_hash)
