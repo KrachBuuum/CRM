@@ -1,0 +1,7 @@
+{
+  "name": "V5 CRM",
+  "description": "A comprehensive CRM system for experts, energy consultants, and technicians featuring automated process numbering, time tracking, and role-based financial views.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

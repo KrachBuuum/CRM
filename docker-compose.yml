@@ -1,0 +1,43 @@
+
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: crm_admin
+      POSTGRES_PASSWORD: HeroeS88
+      POSTGRES_DB: crm_production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: always
+
+  backend:
+    build: .
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=crm_admin
+      - DB_PASSWORD=HeroeS88
+      - DB_NAME=crm_production
+      - JWT_SECRET=HeroeS93
+      - BACKEND_PORT=3000
+      - API_KEY=${API_KEY}
+    depends_on:
+      - db
+    restart: always
+
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - .:/usr/share/nginx/html
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  postgres_data:
