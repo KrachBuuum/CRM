@@ -147,10 +147,10 @@ const App: React.FC = () => {
     setInternalSeconds(0);
   };
 
-  const finalizeInternalTimeBooking = () => {
+  const finalizeInternalTimeBooking = async () => {
     if (!internalTimeDescriptionModal || !currentUser) return;
     const dur = Math.max(0.001, internalTimeDescriptionModal.seconds / 3600);
-    const newNote: Note = {
+    const newNote: Partial<Note> = {
       id: Math.random().toString(36).substr(2, 9),
       processId: 'INTERNAL',
       userId: currentUser.id,
@@ -160,7 +160,12 @@ const App: React.FC = () => {
       duration: dur,
       rateProfileId: 'Intern'
     };
-    setNotes(prev => [...prev, newNote]);
+    try {
+      const saved = await ApiService.createNote(newNote);
+      setNotes(prev => [...prev, saved]);
+    } catch (e) {
+      console.error('Interne Zeit speichern fehlgeschlagen', e);
+    }
     setInternalTimeDescriptionModal(null);
   };
 
@@ -272,51 +277,167 @@ const App: React.FC = () => {
     };
   }, [notes, currentUser, processes, dashboardTimeRange, users]);
 
-  // === HANDLERS ===
-  const handleUpdateProcessStatus = (processId: string, newStatus: ProcessStatus) => {
+  // === API-PERSISTED HANDLERS ===
+
+  // -- Notes --
+  const handleAddNote = async (n: Note) => {
+    try {
+      const saved = await ApiService.createNote(n);
+      setNotes(prev => [...prev, saved]);
+      setPrefilledDuration("0.00");
+    } catch (e) { console.error('Notiz speichern fehlgeschlagen', e); }
+  };
+
+  const handleUpdateNote = async (n: Note) => {
+    try {
+      const saved = await ApiService.updateNote(n.id, n);
+      setNotes(prev => prev.map(item => item.id === saved.id ? saved : item));
+    } catch (e) { console.error('Notiz aktualisieren fehlgeschlagen', e); }
+  };
+
+  const handleDeleteNote = async (nid: string) => {
+    try {
+      await ApiService.deleteNote(nid);
+      setNotes(prev => prev.filter(n => n.id !== nid));
+    } catch (e) { console.error('Notiz löschen fehlgeschlagen', e); }
+  };
+
+  const handleMarkNoteDone = async (noteId: string) => {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    const updated = { ...note, isDone: true };
+    try {
+      const saved = await ApiService.updateNote(noteId, updated);
+      setNotes(prev => prev.map(n => n.id === noteId ? saved : n));
+    } catch (e) { console.error('Aufgabe erledigen fehlgeschlagen', e); }
+  };
+
+  // -- Processes --
+  const handleCreateProcess = async (p: Process) => {
+    const proc = { ...p, storageLink: p.storageLink ? convertToExplorerLink(p.storageLink) : '' };
+    try {
+      const saved = await ApiService.createProcess(proc);
+      setProcesses(prev => [saved, ...prev]);
+      navigateTo('processes', saved.id);
+    } catch (e) { console.error('Vorgang erstellen fehlgeschlagen', e); }
+  };
+
+  const handleUpdateProcess = async (p: Process) => {
+    const proc = { ...p, storageLink: p.storageLink ? convertToExplorerLink(p.storageLink) : '' };
+    try {
+      const saved = await ApiService.updateProcess(p.id, proc);
+      setProcesses(prev => prev.map(item => item.id === saved.id ? saved : item));
+    } catch (e) { console.error('Vorgang aktualisieren fehlgeschlagen', e); }
+  };
+
+  const handleUpdateProcessStatus = async (processId: string, newStatus: ProcessStatus) => {
     if (!currentUser) return;
-    setProcesses(prev => prev.map(p => {
-      if (p.id === processId) {
-        const historyNote: Note = {
-          id: Math.random().toString(36).substr(2, 9),
-          processId: p.id,
-          processNumber: p.processNumber,
-          userId: currentUser.id,
-          userName: currentUser.name,
-          text: `Status geändert auf: ${newStatus}`,
-          timestamp: new Date().toISOString(),
-          duration: 0,
-          rateProfileId: 'Intern',
-          isDone: true
-        };
-        setNotes(prevNotes => [...prevNotes, historyNote]);
-        return { ...p, status: newStatus };
-      }
-      return p;
-    }));
+    const proc = processes.find(p => p.id === processId);
+    if (!proc) return;
+    const updatedProc = { ...proc, status: newStatus };
+    try {
+      const savedProc = await ApiService.updateProcess(processId, updatedProc);
+      setProcesses(prev => prev.map(p => p.id === processId ? savedProc : p));
+      const historyNote: Partial<Note> = {
+        id: Math.random().toString(36).substr(2, 9),
+        processId: proc.id,
+        processNumber: proc.processNumber,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        text: `Status geändert auf: ${newStatus}`,
+        timestamp: new Date().toISOString(),
+        duration: 0,
+        rateProfileId: 'Intern',
+        isDone: true
+      };
+      const savedNote = await ApiService.createNote(historyNote);
+      setNotes(prev => [...prev, savedNote]);
+    } catch (e) { console.error('Status ändern fehlgeschlagen', e); }
   };
 
-  const handleAddInvoice = (processId: string, invoice: any) => {
-    setProcesses(prev => prev.map(p => p.id === processId ? { ...p, invoices: [...(p.invoices || []), invoice] } : p));
+  const handleAddInvoice = async (processId: string, invoice: Invoice) => {
+    const proc = processes.find(p => p.id === processId);
+    if (!proc) return;
+    const updated = { ...proc, invoices: [...(proc.invoices || []), invoice] };
+    try {
+      const saved = await ApiService.updateProcess(processId, updated);
+      setProcesses(prev => prev.map(p => p.id === processId ? saved : p));
+    } catch (e) { console.error('Rechnung hinzufügen fehlgeschlagen', e); }
   };
 
-  const handleUpdateInvoice = (processId: string, invoiceId: string, updates: any) => {
-    setProcesses(prev => prev.map(p => {
-      if (p.id === processId) {
-        return { ...p, invoices: (p.invoices || []).map(inv => inv.id === invoiceId ? { ...inv, ...updates } : inv) };
-      }
-      return p;
-    }));
+  const handleUpdateInvoice = async (processId: string, invoiceId: string, updates: Partial<Invoice>) => {
+    const proc = processes.find(p => p.id === processId);
+    if (!proc) return;
+    const updated = { ...proc, invoices: (proc.invoices || []).map(inv => inv.id === invoiceId ? { ...inv, ...updates } : inv) };
+    try {
+      const saved = await ApiService.updateProcess(processId, updated);
+      setProcesses(prev => prev.map(p => p.id === processId ? saved : p));
+    } catch (e) { console.error('Rechnung aktualisieren fehlgeschlagen', e); }
   };
 
-  const handleDeleteInvoice = (processId: string, invoiceId: string) => {
+  const handleDeleteInvoice = async (processId: string, invoiceId: string) => {
     if (!window.confirm("Soll diese Rechnung wirklich unwiderruflich gelöscht werden?")) return;
-    setProcesses(prev => prev.map(p => {
-      if (p.id === processId) {
-        return { ...p, invoices: (p.invoices || []).filter(inv => inv.id !== invoiceId) };
+    const proc = processes.find(p => p.id === processId);
+    if (!proc) return;
+    const updated = { ...proc, invoices: (proc.invoices || []).filter(inv => inv.id !== invoiceId) };
+    try {
+      const saved = await ApiService.updateProcess(processId, updated);
+      setProcesses(prev => prev.map(p => p.id === processId ? saved : p));
+    } catch (e) { console.error('Rechnung löschen fehlgeschlagen', e); }
+  };
+
+  // -- Contacts --
+  const handleCreateContact = async (c: Contact) => {
+    try {
+      const saved = await ApiService.createContact(c);
+      setContacts(prev => [...prev, saved]);
+    } catch (e) { console.error('Kontakt erstellen fehlgeschlagen', e); }
+  };
+
+  const handleUpdateContact = async (c: Contact) => {
+    try {
+      const saved = await ApiService.updateContact(c.id, c);
+      setContacts(prev => prev.map(item => item.id === saved.id ? saved : item));
+    } catch (e) { console.error('Kontakt aktualisieren fehlgeschlagen', e); }
+  };
+
+  // -- Objects --
+  const handleCreateObject = async (o: CRMObject) => {
+    try {
+      const saved = await ApiService.createObject(o);
+      setObjects(prev => [...prev, saved]);
+    } catch (e) { console.error('Objekt erstellen fehlgeschlagen', e); }
+  };
+
+  const handleUpdateObject = async (o: CRMObject) => {
+    try {
+      const saved = await ApiService.updateObject(o.id, o);
+      setObjects(prev => prev.map(item => item.id === saved.id ? saved : item));
+    } catch (e) { console.error('Objekt aktualisieren fehlgeschlagen', e); }
+  };
+
+  // -- Users (Admin) --
+  const handleSaveUser = async (u: any, isNew: boolean) => {
+    try {
+      if (isNew) {
+        const saved = await ApiService.createUser(u);
+        setUsers(prev => [...prev, saved]);
+      } else {
+        const saved = await ApiService.updateUser(u.id, u);
+        setUsers(prev => prev.map(item => item.id === saved.id ? saved : item));
       }
-      return p;
-    }));
+    } catch (e: any) {
+      alert(e.message || 'Benutzer speichern fehlgeschlagen');
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    try {
+      await ApiService.deleteUser(id);
+      setUsers(prev => prev.filter(u => u.id !== id));
+    } catch (e: any) {
+      alert(e.message || 'Benutzer löschen fehlgeschlagen');
+    }
   };
 
   // === RENDER ===
@@ -367,17 +488,15 @@ const App: React.FC = () => {
             setProcessFilterStatus(status);
             setActiveTab('processes');
           }}
-          onMarkTaskDone={(noteId) => {
-            setNotes(prev => prev.map(n => n.id === noteId ? { ...n, isDone: true } : n));
-          }}
+          onMarkTaskDone={handleMarkNoteDone}
         />
       )}
 
       {activeTab === 'internal-times' && (
         <InternalTimesTab
           notes={notes.filter(n => n.processId === 'INTERNAL')}
-          onDeleteNote={(id) => setNotes(prev => prev.filter(n => n.id !== id))}
-          onUpdateNote={(updated) => setNotes(prev => prev.map(n => n.id === updated.id ? updated : n))}
+          onDeleteNote={handleDeleteNote}
+          onUpdateNote={handleUpdateNote}
         />
       )}
 
@@ -391,11 +510,11 @@ const App: React.FC = () => {
           users={users}
           timerValue={prefilledDuration}
           isTimerActive={timerActive && timerProcessId === selectedProcessId}
-          onUpdateProcess={p => setProcesses(prev => prev.map(item => item.id === p.id ? { ...p, storageLink: p.storageLink ? convertToExplorerLink(p.storageLink) : '' } : item))}
+          onUpdateProcess={handleUpdateProcess}
           onUpdateStatus={handleUpdateProcessStatus}
-          onAddNote={n => { setNotes(prev => [...prev, n]); setPrefilledDuration("0.00"); }}
-          onUpdateNote={n => setNotes(prev => prev.map(item => item.id === n.id ? n : item))}
-          onDeleteNote={nid => setNotes(prev => prev.filter(n => n.id !== nid))}
+          onAddNote={handleAddNote}
+          onUpdateNote={handleUpdateNote}
+          onDeleteNote={handleDeleteNote}
           onAddInvoice={handleAddInvoice}
           onUpdateInvoice={handleUpdateInvoice}
           onDeleteInvoice={handleDeleteInvoice}
@@ -404,9 +523,7 @@ const App: React.FC = () => {
           onOpenObject={id => navigateTo('objects', null, null, id)}
           onStartTimer={() => handleStartProcessTimer(selectedProcessId)}
           onStopTimer={handleStopProcessTimer}
-          onMarkNoteDone={(noteId) => {
-            setNotes(prev => prev.map(n => n.id === noteId ? { ...n, isDone: true } : n));
-          }}
+          onMarkNoteDone={handleMarkNoteDone}
         />
       ) : activeTab === 'processes' && (
         <ProcessList
@@ -423,12 +540,12 @@ const App: React.FC = () => {
         <ContactDetail
           contact={contacts.find(c => c.id === selectedContactId)!}
           onBack={goBack}
-          onUpdate={updated => setContacts(prev => prev.map(c => c.id === updated.id ? updated : c))}
+          onUpdate={handleUpdateContact}
         />
       ) : activeTab === 'contacts' && (
         <ContactList
           contacts={contacts}
-          onAdd={c => setContacts(p => [...p, c])}
+          onAdd={handleCreateContact}
           onSelect={id => navigateTo('contacts', null, id)}
           nextId={padId(contacts.length + 1, 4)}
         />
@@ -439,12 +556,12 @@ const App: React.FC = () => {
           object={objects.find(o => o.id === selectedObjectId)!}
           contacts={contacts}
           onBack={goBack}
-          onUpdate={updated => setObjects(prev => prev.map(o => o.id === updated.id ? updated : o))}
+          onUpdate={handleUpdateObject}
         />
       ) : activeTab === 'objects' && (
         <ObjectList
           objects={objects}
-          onAdd={o => setObjects(p => [...p, o])}
+          onAdd={handleCreateObject}
           onSelect={id => navigateTo('objects', null, null, id)}
           nextId={padId(objects.length + 1, 4)}
         />
@@ -453,7 +570,8 @@ const App: React.FC = () => {
       {activeTab === 'admin' && currentUser.role === UserRole.ADMIN && (
         <AdminView
           users={users}
-          onUpdateUsers={setUsers}
+          onSaveUser={handleSaveUser}
+          onDeleteUser={handleDeleteUser}
         />
       )}
 
@@ -462,9 +580,9 @@ const App: React.FC = () => {
           contacts={contacts}
           objects={objects}
           processes={processes}
-          onSubmit={p => { setProcesses(prev => [{ ...p, storageLink: p.storageLink ? convertToExplorerLink(p.storageLink) : '' }, ...prev]); navigateTo('processes', p.id); }}
-          onAddContact={(c: Contact) => setContacts(prev => [...prev, c])}
-          onAddObject={(o: CRMObject) => setObjects(prev => [...prev, o])}
+          onSubmit={handleCreateProcess}
+          onAddContact={handleCreateContact}
+          onAddObject={handleCreateObject}
           onCancel={goBack}
           nextContactId={padId(contacts.length + 1, 4)}
           nextObjectId={padId(objects.length + 1, 4)}

@@ -1285,12 +1285,11 @@ export const ObjectModal: React.FC<{ nextId: string, onSave: (o: CRMObject) => v
   );
 };
 
-export const AdminView: React.FC<{ users: User[], onUpdateUsers: (u: User[]) => void }> = ({ users, onUpdateUsers }) => {
+export const AdminView: React.FC<{ users: User[], onSaveUser: (u: any, isNew: boolean) => void, onDeleteUser: (id: string) => void }> = ({ users, onSaveUser, onDeleteUser }) => {
   const [showModal, setShowModal] = useState<User | 'new' | null>(null);
-  const saveUser = (u: User) => { 
-    if (showModal === 'new') onUpdateUsers([...users, u]); 
-    else onUpdateUsers(users.map(item => item.id === u.id ? u : item)); 
-    setShowModal(null); 
+  const saveUser = (u: any) => {
+    onSaveUser(u, showModal === 'new');
+    setShowModal(null);
   };
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -1300,8 +1299,10 @@ export const AdminView: React.FC<{ users: User[], onUpdateUsers: (u: User[]) => 
           <thead className="bg-slate-50 border-b">
             <tr>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Nutzer</th>
+              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Benutzername</th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Rolle</th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Kosten (€/h)</th>
+              <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Status</th>
               <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase">Aktion</th>
             </tr>
           </thead>
@@ -1309,10 +1310,13 @@ export const AdminView: React.FC<{ users: User[], onUpdateUsers: (u: User[]) => 
             {users.map(u => (
               <tr key={u.id} className="border-b hover:bg-slate-50">
                 <td className="px-8 py-5 text-sm font-bold text-slate-700">{u.name}</td>
+                <td className="px-8 py-5 text-xs font-bold text-slate-500">{u.username}</td>
                 <td className="px-8 py-5 text-xs font-bold text-indigo-500">{u.role}</td>
                 <td className="px-8 py-5 text-xs font-bold text-slate-600">{u.costRate.toFixed(2)}</td>
-                <td className="px-8 py-5">
+                <td className="px-8 py-5">{u.isLocked ? <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-1 rounded-full border border-rose-100"><Lock size={12} className="inline mr-1"/>Gesperrt</span> : <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100"><Unlock size={12} className="inline mr-1"/>Aktiv</span>}</td>
+                <td className="px-8 py-5 flex items-center space-x-2">
                   <button onClick={() => setShowModal(u)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Edit2 size={16}/></button>
+                  <button onClick={() => { if (confirm('Benutzer wirklich löschen?')) onDeleteUser(u.id); }} className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={16}/></button>
                 </td>
               </tr>
             ))}
@@ -1324,18 +1328,20 @@ export const AdminView: React.FC<{ users: User[], onUpdateUsers: (u: User[]) => 
   );
 };
 
-const UserEditModal: React.FC<{ user?: User, onSave: (u: User) => void, onClose: () => void }> = ({ user, onSave, onClose }) => {
-  const [form, setForm] = useState<User>(user || { 
-    id: Math.random().toString(36).substr(2, 9), 
-    name: '', 
-    username: '', 
-    role: UserRole.STANDARD, 
-    failedAttempts: 0, 
-    isLocked: false, 
+const UserEditModal: React.FC<{ user?: User, onSave: (u: any) => void, onClose: () => void }> = ({ user, onSave, onClose }) => {
+  const [form, setForm] = useState<User>(user || {
+    id: Math.random().toString(36).substr(2, 9),
+    name: '',
+    username: '',
+    role: UserRole.STANDARD,
+    failedAttempts: 0,
+    isLocked: false,
     costRate: 0,
-    rates: [{ roleName: 'Intern', rate: 0 }], 
-    standardRateProfileId: 'Intern' 
+    rates: [{ roleName: 'Intern', rate: 0 }],
+    standardRateProfileId: 'Intern'
   });
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const addRate = () => setForm({...form, rates: [...form.rates, { roleName: '', rate: 0 }]});
   const updateRate = (idx: number, field: keyof UserRate, val: any) => {
@@ -1344,14 +1350,22 @@ const UserEditModal: React.FC<{ user?: User, onSave: (u: User) => void, onClose:
     setForm({...form, rates: newRates});
   };
 
+  const handleSave = () => {
+    if (!form.name || !form.username) { setError('Name und Benutzername sind erforderlich'); return; }
+    if (!user && !password) { setError('Passwort ist für neue Benutzer erforderlich'); return; }
+    onSave({ ...form, password: password || undefined });
+  };
+
   return (
     <Modal title={user ? "Nutzer editieren" : "Neuer Nutzer"} onClose={onClose}>
       <div className="space-y-8">
+        {error && <div className="bg-rose-50 text-rose-600 px-4 py-3 rounded-2xl text-sm font-bold border border-rose-100">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-6">
             <h4 className="font-bold text-slate-800 border-b pb-2 flex items-center"><UserCircle size={18} className="mr-2 text-indigo-600"/> Stammdaten</h4>
-            <FormField label="Name" value={form.name} onChange={(v:any) => setForm({...form, name: v})} />
+            <FormField label="Name" value={form.name} onChange={(v:any) => setForm({...form, name: v})} autoFocus />
             <FormField label="Benutzername" value={form.username} onChange={(v:any) => setForm({...form, username: v})} />
+            <FormField label={user ? "Neues Passwort (leer = unverändert)" : "Passwort"} type="password" value={password} onChange={(v:any) => setPassword(v)} placeholder={user ? "Nur bei Änderung eingeben" : "Passwort vergeben"} />
             <FormField label="Kosten pro Stunde (€)" type="number" value={form.costRate} onChange={(v:any) => setForm({...form, costRate: parseFloat(v) || 0})} />
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Systemrolle</label>
@@ -1359,10 +1373,19 @@ const UserEditModal: React.FC<{ user?: User, onSave: (u: User) => void, onClose:
                 {Object.values(UserRole).map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
+            <div className="flex items-center space-x-3">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Konto gesperrt</label>
+              <button
+                onClick={() => setForm({...form, isLocked: !form.isLocked})}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${form.isLocked ? 'bg-rose-100 text-rose-600 border border-rose-200' : 'bg-emerald-100 text-emerald-600 border border-emerald-200'}`}
+              >
+                {form.isLocked ? <><Lock size={14} className="inline mr-1"/>Gesperrt</> : <><Unlock size={14} className="inline mr-1"/>Aktiv</>}
+              </button>
+            </div>
           </div>
           <div className="space-y-6">
             <h4 className="font-bold text-slate-800 border-b pb-2 flex justify-between items-center">
-              <Euro size={18} className="mr-2 text-indigo-600"/> Stundensätze (Verrechnung)
+              <span className="flex items-center"><Euro size={18} className="mr-2 text-indigo-600"/> Stundensätze (Verrechnung)</span>
               <button onClick={addRate} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-full transition-all"><Plus size={18}/></button>
             </h4>
             <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
@@ -1380,7 +1403,7 @@ const UserEditModal: React.FC<{ user?: User, onSave: (u: User) => void, onClose:
             </div>
           </div>
         </div>
-        <button onClick={() => onSave(form)} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95">NUTZER SPEICHERN</button>
+        <button onClick={handleSave} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all active:scale-95">NUTZER SPEICHERN</button>
       </div>
     </Modal>
   );

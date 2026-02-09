@@ -29,6 +29,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(err.error || 'Netzwerkfehler');
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json();
 }
 
@@ -50,11 +51,30 @@ export const ApiService = {
     window.location.reload();
   },
 
+  // Users
   getUsers: () => request<User[]>('/users'),
+  createUser: (u: any) => request<User>('/users', { method: 'POST', body: JSON.stringify(u) }),
+  updateUser: (id: string, u: any) => request<User>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(u) }),
+  deleteUser: (id: string) => request<void>(`/users/${id}`, { method: 'DELETE' }),
+
+  // Contacts
   getContacts: () => request<Contact[]>('/contacts'),
+  createContact: (c: Contact) => request<Contact>('/contacts', { method: 'POST', body: JSON.stringify(c) }),
+  updateContact: (id: string, c: Contact) => request<Contact>(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(c) }),
+
+  // Processes
   getProcesses: () => request<Process[]>('/processes'),
+  createProcess: (p: Process) => request<Process>('/processes', { method: 'POST', body: JSON.stringify(p) }),
+  updateProcess: (id: string, p: Process) => request<Process>(`/processes/${id}`, { method: 'PUT', body: JSON.stringify(p) }),
+
+  // Objects
   getObjects: () => request<CRMObject[]>('/objects'),
+  createObject: (o: CRMObject) => request<CRMObject>('/objects', { method: 'POST', body: JSON.stringify(o) }),
+  updateObject: (id: string, o: CRMObject) => request<CRMObject>(`/objects/${id}`, { method: 'PUT', body: JSON.stringify(o) }),
+
+  // Notes
   getNotes: () => request<Note[]>('/notes'),
-  createNote: (n: Note) => request<Note>('/notes', { method: 'POST', body: JSON.stringify(n) }),
+  createNote: (n: Partial<Note>) => request<Note>('/notes', { method: 'POST', body: JSON.stringify(n) }),
+  updateNote: (id: string, n: Partial<Note>) => request<Note>(`/notes/${id}`, { method: 'PUT', body: JSON.stringify(n) }),
   deleteNote: (id: string) => request<void>(`/notes/${id}`, { method: 'DELETE' }),
 };
