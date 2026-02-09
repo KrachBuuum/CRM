@@ -66,6 +66,9 @@ export const ApiService = {
   getProcesses: () => request<Process[]>('/processes'),
   createProcess: (p: Partial<Process>) => request<Process>('/processes', { method: 'POST', body: JSON.stringify(p) }),
   updateProcess: (id: string, p: Partial<Process>) => request<Process>(`/processes/${id}`, { method: 'PUT', body: JSON.stringify(p) }),
+  deleteProcess: (id: string) => request<void>(`/processes/${id}`, { method: 'DELETE' }),
+
+  deleteContact: (id: string) => request<void>(`/contacts/${id}`, { method: 'DELETE' }),
 
   getObjects: () => request<CRMObject[]>('/objects'),
   createObject: (o: Partial<CRMObject>) => request<CRMObject>('/objects', { method: 'POST', body: JSON.stringify(o) }),

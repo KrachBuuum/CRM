@@ -102,21 +102,45 @@ app.get("/api/contacts", requireAuth, async (req, res) => {
   res.json(r.rows)
 })
 
+const jsonOrNull = (v) => v ? JSON.stringify(v) : null
+
 app.post("/api/contacts", requireAuth, async (req, res) => {
   const c = req.body || {}
   const r = await pool.query(
-    `INSERT INTO contacts (category, company_name, first_name, last_name, phone_mobile, phone_landline, email_business, address, internal_notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    `INSERT INTO contacts (category, company_name, first_name, last_name, salutation, title,
+     phone_mobile, phone_landline, email_business, email_private, uc_id, preferred_contact_way,
+     address, billing_address_active, billing_address, second_person_active, second_person_data,
+     internal_notes, website, industry, legal_form, ust_id, cooperation_status, conditions, region,
+     company_contacts)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+     RETURNING *`,
     [
       c.category ?? null,
-      c.company_name ?? c.companyName ?? null,
-      c.first_name ?? c.firstName ?? null,
-      c.last_name ?? c.lastName ?? null,
-      c.phone_mobile ?? c.phoneMobile ?? null,
-      c.phone_landline ?? c.phoneLandline ?? null,
-      c.email_business ?? c.emailBusiness ?? null,
-      c.address ? JSON.stringify(c.address) : null,
-      c.internal_notes ?? c.internalNotes ?? null,
+      c.company_name ?? null,
+      c.first_name ?? null,
+      c.last_name ?? null,
+      c.salutation ?? null,
+      c.title ?? null,
+      c.phone_mobile ?? null,
+      c.phone_landline ?? null,
+      c.email_business ?? null,
+      c.email_private ?? null,
+      c.uc_id ?? null,
+      c.preferred_contact_way ?? null,
+      jsonOrNull(c.address),
+      c.billing_address_active ?? false,
+      jsonOrNull(c.billing_address),
+      c.second_person_active ?? false,
+      jsonOrNull(c.second_person_data),
+      c.internal_notes ?? null,
+      c.website ?? null,
+      c.industry ?? null,
+      c.legal_form ?? null,
+      c.ust_id ?? null,
+      c.cooperation_status ?? null,
+      c.conditions ?? null,
+      c.region ?? null,
+      jsonOrNull(c.company_contacts) ?? '[]',
     ]
   )
   res.status(201).json(r.rows[0])
@@ -125,24 +149,49 @@ app.post("/api/contacts", requireAuth, async (req, res) => {
 app.put("/api/contacts/:id", requireAuth, async (req, res) => {
   const c = req.body || {}
   const r = await pool.query(
-    `UPDATE contacts SET category=$1, company_name=$2, first_name=$3, last_name=$4,
-     phone_mobile=$5, phone_landline=$6, email_business=$7, address=$8, internal_notes=$9
-     WHERE id=$10 RETURNING *`,
+    `UPDATE contacts SET category=$1, company_name=$2, first_name=$3, last_name=$4, salutation=$5, title=$6,
+     phone_mobile=$7, phone_landline=$8, email_business=$9, email_private=$10, uc_id=$11, preferred_contact_way=$12,
+     address=$13, billing_address_active=$14, billing_address=$15, second_person_active=$16, second_person_data=$17,
+     internal_notes=$18, website=$19, industry=$20, legal_form=$21, ust_id=$22, cooperation_status=$23,
+     conditions=$24, region=$25, company_contacts=$26
+     WHERE id=$27 RETURNING *`,
     [
       c.category ?? null,
-      c.company_name ?? c.companyName ?? null,
-      c.first_name ?? c.firstName ?? null,
-      c.last_name ?? c.lastName ?? null,
-      c.phone_mobile ?? c.phoneMobile ?? null,
-      c.phone_landline ?? c.phoneLandline ?? null,
-      c.email_business ?? c.emailBusiness ?? null,
-      c.address ? JSON.stringify(c.address) : null,
-      c.internal_notes ?? c.internalNotes ?? null,
+      c.company_name ?? null,
+      c.first_name ?? null,
+      c.last_name ?? null,
+      c.salutation ?? null,
+      c.title ?? null,
+      c.phone_mobile ?? null,
+      c.phone_landline ?? null,
+      c.email_business ?? null,
+      c.email_private ?? null,
+      c.uc_id ?? null,
+      c.preferred_contact_way ?? null,
+      jsonOrNull(c.address),
+      c.billing_address_active ?? false,
+      jsonOrNull(c.billing_address),
+      c.second_person_active ?? false,
+      jsonOrNull(c.second_person_data),
+      c.internal_notes ?? null,
+      c.website ?? null,
+      c.industry ?? null,
+      c.legal_form ?? null,
+      c.ust_id ?? null,
+      c.cooperation_status ?? null,
+      c.conditions ?? null,
+      c.region ?? null,
+      jsonOrNull(c.company_contacts) ?? '[]',
       req.params.id,
     ]
   )
   if (r.rowCount === 0) return res.status(404).json({ error: "Kontakt nicht gefunden" })
   res.json(r.rows[0])
+})
+
+app.delete("/api/contacts/:id", requireAuth, async (req, res) => {
+  await pool.query("DELETE FROM contacts WHERE id = $1", [req.params.id])
+  res.status(204).end()
 })
 
 app.get("/api/processes", requireAuth, async (req, res) => {
@@ -165,6 +214,12 @@ app.post("/api/processes", requireAuth, async (req, res) => {
     ]
   )
   res.status(201).json(r.rows[0])
+})
+
+app.delete("/api/processes/:id", requireAuth, async (req, res) => {
+  await pool.query("DELETE FROM notes WHERE process_id = $1", [req.params.id])
+  await pool.query("DELETE FROM processes WHERE id = $1", [req.params.id])
+  res.status(204).end()
 })
 
 app.put("/api/processes/:id", requireAuth, async (req, res) => {

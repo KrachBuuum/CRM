@@ -18,11 +18,28 @@ CREATE TABLE IF NOT EXISTS contacts (
     company_name TEXT,
     first_name TEXT,
     last_name TEXT,
+    salutation TEXT,
+    title TEXT,
     phone_mobile TEXT,
     phone_landline TEXT,
     email_business TEXT,
+    email_private TEXT,
+    uc_id TEXT,
+    preferred_contact_way TEXT,
     address JSONB,
-    internal_notes TEXT
+    billing_address_active BOOLEAN DEFAULT FALSE,
+    billing_address JSONB,
+    second_person_active BOOLEAN DEFAULT FALSE,
+    second_person_data JSONB,
+    internal_notes TEXT,
+    website TEXT,
+    industry TEXT,
+    legal_form TEXT,
+    ust_id TEXT,
+    cooperation_status TEXT,
+    conditions TEXT,
+    region TEXT,
+    company_contacts JSONB DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS processes (
