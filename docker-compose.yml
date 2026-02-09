@@ -14,7 +14,9 @@ services:
     restart: always
 
   backend:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -34,7 +36,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
-      - .:/usr/share/nginx/html
+      - ./dist:/usr/share/nginx/html:ro
     depends_on:
       - backend
     restart: always
