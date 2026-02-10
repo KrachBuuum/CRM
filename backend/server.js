@@ -278,8 +278,21 @@ function mapObject(row) {
   };
 }
 
+// ─── Login Bypass Flag ──────────────────────────────────────────────────────
+// Set LOGIN_BYPASS=true to disable authentication (dashboard directly accessible).
+// Set LOGIN_BYPASS=false to re-enable full JWT authentication.
+const LOGIN_BYPASS = (process.env.LOGIN_BYPASS || "true").toLowerCase() === "true";
+
+if (LOGIN_BYPASS) {
+  console.log("[auth] >>> LOGIN BYPASS ACTIVE - Keine Authentifizierung erforderlich <<<");
+}
+
 // ─── Auth Middleware ──────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
+  if (LOGIN_BYPASS) {
+    req.user = { id: "u1", username: "admin", role: "ADMIN" };
+    return next();
+  }
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Token fehlt" });
@@ -297,6 +310,11 @@ app.get("/api/health", (req, res) => res.json({ ok: true }));
 // ─── Auth ────────────────────────────────────────────────────────────────────
 app.post("/api/auth/login", async (req, res) => {
   try {
+    // If login bypass is active, return a dummy token for any credentials
+    if (LOGIN_BYPASS) {
+      const token = jwt.sign({ id: "u1", username: "admin", role: "ADMIN" }, JWT_SECRET, { expiresIn: "365d" });
+      return res.json({ token, user: { id: "u1", name: "System Administrator", username: "admin", role: "ADMIN" } });
+    }
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: "Username und Passwort erforderlich" });
 

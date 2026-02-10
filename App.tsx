@@ -31,13 +31,27 @@ const App: React.FC = () => {
     setShowProcessForm(false);
   }, [activeTab]);
 
+  // ─── LOGIN BYPASS ──────────────────────────────────────────────────────────
+  // Dashboard ist direkt ohne Login erreichbar.
+  // Um Login zu reaktivieren:
+  //   1. Diesen Block durch den Original-Block ersetzen (siehe unten)
+  //   2. Backend: LOGIN_BYPASS=false setzen
+  // Original-Block:
+  //   const token = localStorage.getItem('crm_token');
+  //   if (token) { loadData(); } else { setLoading(false); setIsInitialized(true); }
   useEffect(() => {
     const token = localStorage.getItem('crm_token');
     if (token) {
       loadData();
     } else {
-      setLoading(false);
-      setIsInitialized(true);
+      (async () => {
+        try {
+          await ApiService.login('admin', 'admin123');
+          await loadData();
+        } catch {
+          try { await loadData(); } catch { setLoading(false); setIsInitialized(true); }
+        }
+      })();
     }
   }, []);
 

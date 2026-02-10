@@ -11,6 +11,16 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: always
+    # Pi-Optimierung: Speicherlimit
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_admin -d crm_production"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -24,10 +34,16 @@ services:
       - DB_NAME=crm_production
       - JWT_SECRET=HeroeS93
       - BACKEND_PORT=3000
-      - API_KEY=${API_KEY}
+      - LOGIN_BYPASS=true
+      - API_KEY=${API_KEY:-}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   nginx:
     image: nginx:stable-alpine
@@ -39,6 +55,10 @@ services:
     depends_on:
       - backend
     restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 64M
 
 volumes:
   postgres_data:
