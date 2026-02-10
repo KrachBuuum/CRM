@@ -164,16 +164,14 @@ async function runMigrations() {
   try { await pool.query("ALTER TABLE processes ALTER COLUMN customer_id TYPE TEXT") } catch (e) {}
   try { await pool.query("ALTER TABLE notes ALTER COLUMN process_id TYPE TEXT") } catch (e) {}
 
-  // Ensure admin user exists with correct bcrypt hash
-  const adminCheck = await pool.query("SELECT id FROM users WHERE username = 'admin'")
-  if (adminCheck.rowCount === 0) {
-    const hash = await bcrypt.hash("admin123", 10)
-    await pool.query(
-      `INSERT INTO users (id, name, username, role, cost_rate, rates, standard_rate_profile_id, password_hash)
-       VALUES ('u1', 'System Administrator', 'admin', 'ADMIN', 85.00, '[{"roleName":"Sachverstaendiger","rate":150}]', 'Sachverstaendiger', $1)`,
-      [hash]
-    )
-  }
+  // Ensure admin user exists with correct bcrypt hash (always update hash)
+  const hash = await bcrypt.hash("admin123", 10)
+  await pool.query(
+    `INSERT INTO users (id, name, username, role, cost_rate, rates, standard_rate_profile_id, password_hash)
+     VALUES ('u1', 'System Administrator', 'admin', 'ADMIN', 85.00, '[{"roleName":"Sachverstaendiger","rate":150}]', 'Sachverstaendiger', $1)
+     ON CONFLICT (username) DO UPDATE SET password_hash = $1`,
+    [hash]
+  )
 
   console.log("[migrations] done")
 }

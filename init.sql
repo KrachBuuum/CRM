@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 
 -- Admin User 'admin' / 'admin123'
--- Hash für 'admin123': $2a$10$vI8A7sz51qV5W9.f8.6.GeLqZp6N6gO.P.D6qO1i.V6D8.r0G.Z0e
 INSERT INTO users (id, name, username, role, cost_rate, rates, standard_rate_profile_id, password_hash)
-VALUES ('u1', 'System Administrator', 'admin', 'ADMIN', 85.00, '[{"roleName": "Sachverständiger", "rate": 150}]', 'Sachverständiger', '$2a$10$vI8A7sz51qV5W9.f8.6.GeLqZp6N6gO.P.D6qO1i.V6D8.r0G.Z0e')
+VALUES ('u1', 'System Administrator', 'admin', 'ADMIN', 85.00, '[{"roleName": "Sachverstaendiger", "rate": 150}]', 'Sachverstaendiger', '$2b$10$FrRikm9Jv.Sr5DMEs5.NUet6Uvlq0eIILP1dVZzRtWOHAmQhSvwiq')
 ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;
