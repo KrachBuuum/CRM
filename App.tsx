@@ -47,7 +47,10 @@ const App: React.FC = () => {
       setIsInitialized(true);
     } catch (err) {
       console.error("Fehler beim Laden", err);
-      ApiService.logout();
+      // Clear invalid token and show login screen - no reload loop
+      localStorage.removeItem('crm_token');
+      setCurrentUser(null);
+      setIsInitialized(true);
     } finally {
       setLoading(false);
     }

@@ -12,6 +12,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_admin -d crm_production"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -25,11 +30,10 @@ services:
       - DB_NAME=crm_production
       - JWT_SECRET=HeroeS93
       - BACKEND_PORT=3000
-      - API_KEY=${API_KEY}
+      - API_KEY=${API_KEY:-}
     depends_on:
-      - db
-    env_file:
-      - ./backend/.env
+      db:
+        condition: service_healthy
     restart: always
 
   nginx:
